@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os
 
@@ -48,3 +49,5 @@ def health():
         "total_scenes": len(nusc.scene) if nusc else 0,
         "total_samples": len(nusc.sample) if nusc else 0,
     }
+
+app.mount("/data", StaticFiles(directory=settings.NUSCENES_DATAROOT), name="data")

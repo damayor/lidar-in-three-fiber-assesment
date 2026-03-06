@@ -45,13 +45,10 @@ data/nuscenes/
 
 ```bash
 # Desde la carpeta nuscenes-api/
-python -m venv venv
+python3 -m venv venv
 
-# Activar (Mac/Linux)
+# Activar (Mac/Linux/WSL)
 source venv/bin/activate
-
-# Activar (Windows)
-venv\Scripts\activate
 
 # Instalar
 pip install -r requirements.txt
