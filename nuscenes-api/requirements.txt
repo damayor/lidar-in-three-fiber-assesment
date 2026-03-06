@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+nuscenes-devkit
+pydantic-settings
+python-dotenv
+Shapely>=2.0.0
