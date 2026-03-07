@@ -20,7 +20,7 @@ export const Timeline: FC<TimelineProps> = ({ samples, selectedToken, onSelect }
   if (samples.length === 0) return null;
 
   return (
-    <div className="border-t border-[#1c2532] bg-[#0d1117] flex-shrink-0">
+    <div className="border-t border-[#1c2532] bg-[#0d1117] shrink-0">
       {/* Header bar */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-[#1c2532]">
         <span className="text-[9px] font-bold tracking-[2px] text-[#636e7b] uppercase font-mono">Timeline</span>
@@ -32,14 +32,14 @@ export const Timeline: FC<TimelineProps> = ({ samples, selectedToken, onSelect }
         <button
           onClick={() => selectedIdx > 0 && onSelect(samples[selectedIdx - 1])}
           disabled={selectedIdx <= 0}
-          className="text-[10px] font-mono text-[#636e7b] hover:text-[#00e5ff] disabled:opacity-20 px-1 transition-colors"
+          className="text-[10px] font-mono text-[#636e7b] hover:text-cyan-400 disabled:opacity-20 px-1 transition-colors"
         >
           ◀
         </button>
         <button
           onClick={() => selectedIdx < samples.length - 1 && onSelect(samples[selectedIdx + 1])}
           disabled={selectedIdx >= samples.length - 1}
-          className="text-[10px] font-mono text-[#636e7b] hover:text-[#00e5ff] disabled:opacity-20 px-1 transition-colors"
+          className="text-[10px] font-mono text-[#636e7b] hover:text-cyan-400 disabled:opacity-20 px-1 transition-colors"
         >
           ▶
         </button>
@@ -59,7 +59,7 @@ export const Timeline: FC<TimelineProps> = ({ samples, selectedToken, onSelect }
             >
               <div className={`w-2.5 h-2.5 rounded-full border transition-all duration-150 ${
                 isActive
-                  ? "bg-[#00e5ff] border-[#00e5ff] scale-125 shadow-[0_0_6px_#00e5ff]"
+                  ? "bg-cyan-400 border-cyan-400 scale-125 shadow-[0_0_6px_#00e5ff]"
                   : "bg-[#1c2532] border-[#2d3f55] group-hover:bg-[#636e7b] group-hover:border-[#636e7b]"
               }`} />
             </button>

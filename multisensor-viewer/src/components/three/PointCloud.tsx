@@ -1,7 +1,7 @@
 import { useRef, useMemo, type FC } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { Point3D } from "../interfaces/types";
+import type { Point3D } from "../../interfaces/types";
 
 interface PointCloudProps {
   points: Point3D[];
@@ -15,8 +15,13 @@ export const PointCloud: FC<PointCloudProps> = ({ points }) => {
     const pos = new Float32Array(points.length * 3);
     const col = new Float32Array(points.length * 3);
     const c   = new THREE.Color();
+    //Wooow! Seems like C++
     points.forEach((p, i) => {
-      pos[i*3]=p.x; pos[i*3+1]=p.y; pos[i*3+2]=p.z;
+      // console.log(`point pos ${i} [ ${p.x} ,${p.y} , ${p.z} ] ` )
+      pos[i*3]   = p.x;
+      pos[i*3+1] = p.z;   // nuScenes Z (up) → Three.js Y (up) ✅
+      pos[i*3+2] = -p.y;  // nuScenes Y (left) → Three.js -Z ✅
+
       const t = Math.min(Math.max((p.z + 2) / 5, 0), 1);
       c.setHSL(0.55 - t * 0.55, 1, 0.55);
       col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
@@ -26,7 +31,7 @@ export const PointCloud: FC<PointCloudProps> = ({ points }) => {
     return geo;
   }, [points]);
 
-  useFrame((_, dt) => { if (ref.current) ref.current.rotation.z += dt * 0.025; });
+  // useFrame((_, dt) => { if (ref.current) ref.current.rotation.z += dt * 0.025; });
 
   return (
     <points ref={ref} geometry={geometry}>

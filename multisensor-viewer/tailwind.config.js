@@ -7,7 +7,7 @@ module.exports = {
     extend: {
       fontFamily: {
         mono: ['"Space Mono"', 'monospace'],
-        display: ['Syne', 'sans-serif'],
+        display: ['Montserrat', 'sans-serif'],
       },
     },
   },

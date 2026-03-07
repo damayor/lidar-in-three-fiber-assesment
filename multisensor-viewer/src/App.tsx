@@ -8,11 +8,12 @@ import {
   type SceneSamplesResponse,
   type Point3D,
   type ActiveTab,
+  type TransformData,
 } from "./interfaces/types";
 import { parsePCDBin } from "./utils/pcdParser";
 import { SensorChip } from "./components/SensorChip";
 import { Timeline } from "./components/Timeline";
-import { LidarViewer } from "./components/LidarViewer";
+import { LidarViewer } from "./components/three/LidarViewer";
 
 export default function App() {
   const [scenes,           setScenes]           = useState<Scene[]>([]);
@@ -24,6 +25,8 @@ export default function App() {
   const [activeTab,        setActiveTab]        = useState<ActiveTab>("cameras");
   const [loadingScenes,    setLoadingScenes]    = useState(true);
   const [highlightedToken, setHighlightedToken] = useState<string | null>(null);
+  const [transformData, setTransformData] = useState<TransformData | null>(null);
+
 
   useEffect(() => {
     fetch(`${API}/scenes?limit=20`)
@@ -47,6 +50,7 @@ export default function App() {
   }, [selectedScene]);
 
   const selectSample = (sample: SampleListItem): void => {
+    console.log('sample token', sample.token)
     setSelectedSample(sample);
     setSampleData(null);
     setLidarPoints(null);
@@ -63,6 +67,15 @@ export default function App() {
             .catch(() => setLidarPoints([]));
         }
       });
+
+    fetch(`${API}/sensor-data/sample/${sample.token}/channel/LIDAR_TOP`)
+    .then(r => r.json())
+    .then(sd => {
+      setTransformData({
+        egoTranslation:    sd.ego_pose.translation,
+        sensorTranslation: sd.calibration.translation,
+      });
+    });
   };
 
   const sensors     = sampleData?.sensors     ?? {};
@@ -73,8 +86,8 @@ export default function App() {
 
       {/* ── HEADER ── */}
       <header className="flex items-center gap-4 px-6 h-14 bg-[#0d1117] border-b border-[#1c2532] shrink-0 z-10">
-        <span className="font-['Syne'] font-extrabold text-lg tracking-tight text-white">
-          nu<span className="text-[#00e5ff]">SCENES</span>
+        <span className="font-['Montserrat'] font-extrabold text-lg tracking-tight text-white">
+          nu<span className="text-cyan-400">SCENES</span>
         </span>
         <div className="w-px h-6 bg-[#1c2532]" />
         <span className="text-[11px] text-[#636e7b] flex-1 truncate">
@@ -93,7 +106,7 @@ export default function App() {
           </div>
           {loadingScenes ? (
             <div className="flex items-center justify-center h-20">
-              <div className="w-5 h-5 border-2 border-[#1c2532] border-t-[#00e5ff] rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-[#1c2532] border-t-cyan-400 rounded-full animate-spin" />
             </div>
           ) : (
             scenes.map(s => (
@@ -103,8 +116,8 @@ export default function App() {
                 className={`
                   w-full text-left px-4 py-3 border-l-2 transition-all text-xs
                   ${selectedScene?.token === s.token
-                    ? "border-[#00e5ff] bg-[#00e5ff]/08 text-[#00e5ff]"
-                    : "border-transparent hover:border-[#00e5ff] hover:bg-[#00e5ff]/05 text-[#cdd9e5]"
+                    ? "border-cyan-400 bg-cyan-400/08 text-cyan-400"
+                    : "border-transparent hover:border-cyan-400 hover:bg-cyan-400/05 text-[#cdd9e5]"
                   }
                 `}
               >
@@ -122,7 +135,7 @@ export default function App() {
           {!sampleData ? (
             <div className="flex-1 flex items-center justify-center flex-col gap-3">
               {selectedScene
-                ? <><div className="w-6 h-6 border-2 border-[#1c2532] border-t-[#00e5ff] rounded-full animate-spin" /><span className="text-[#636e7b] text-xs">Loading frame...</span></>
+                ? <><div className="w-6 h-6 border-2 border-[#1c2532] border-t-cyan-400 rounded-full animate-spin" /><span className="text-[#636e7b] text-xs">Loading frame...</span></>
                 : <span className="text-[#636e7b] text-sm">← Pick a scene from the left</span>
               }
             </div>
@@ -142,7 +155,7 @@ export default function App() {
                     className={`
                       px-4 py-3.5 text-[11px] font-bold tracking-widest uppercase border-b-2 transition-all
                       ${activeTab === t
-                        ? "text-[#00e5ff] border-[#00e5ff]"
+                        ? "text-cyan-400 border-cyan-400"
                         : "text-[#636e7b] border-transparent hover:text-[#cdd9e5]"
                       }
                     `}
@@ -152,7 +165,7 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Tab content */}
+              {/* Main Tab content */}
               <div className="flex-1 overflow-auto">
                 {activeTab === "cameras" && (
                   <div className="grid grid-cols-3 gap-0.5 p-0.5 bg-[#1c2532]">
@@ -164,7 +177,7 @@ export default function App() {
                             ? <img src={`${API}/data/${s.filename}`} alt={ch} loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
                             : <div className="w-full h-full flex items-center justify-center text-[#636e7b] text-[10px]">No image</div>
                           }
-                          <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-sm border border-[#00e5ff]/30 text-[#00e5ff] text-[9px] font-bold tracking-[1.5px] px-1.5 py-0.5 rounded-sm">
+                          <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-sm border border-cyan-400/30 text-cyan-400 text-[9px] font-bold tracking-[1.5px] px-1.5 py-0.5 rounded-sm">
                             {ch.replace("CAM_", "").replace(/_/g, " ")}
                           </div>
                         </div>
@@ -178,6 +191,7 @@ export default function App() {
                     points={lidarPoints}
                     annotations={annotations}
                     highlightedToken={highlightedToken}
+                    transformData={transformData}
                   />
                 )}
               </div>
@@ -195,9 +209,9 @@ export default function App() {
         {/* RIGHT SIDEBAR — annotations */}
         <aside className="w-72 bg-[#0d1117] border-l border-[#1c2532] flex flex-col overflow-y-auto shrink-0">
           <div className="flex items-baseline gap-2 px-4 py-3 border-b border-[#1c2532] shrink-0">
-            <span className="font-['Syne'] font-semibold text-[13px] text-white">Annotations</span>
+            <span className="font-['Montserrat'] font-semibold text-[13px] text-white">Annotations</span>
             {annotations.length > 0 && (
-              <span className="text-[10px] text-[#00e5ff] bg-[#00e5ff]/10 border border-[#00e5ff]/20 px-1.5 py-0.5 rounded-full">
+              <span className="text-[10px] text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-1.5 py-0.5 rounded-full">
                 {annotations.length}
               </span>
             )}
@@ -235,7 +249,7 @@ export default function App() {
                   w-full text-left flex gap-2.5 items-start px-3.5 py-2.5
                   border-b border-[#1c2532] border-l-2 transition-all
                   ${isHighlighted
-                    ? "bg-[#00e5ff]/06 border-l-[#00e5ff]"
+                    ? "bg-cyan-400/06 border-l-cyan-400"
                     : "border-l-transparent hover:bg-white/[0.02] hover:border-l-[#2d3f55]"
                   }
                 `}
@@ -248,7 +262,7 @@ export default function App() {
                     <span>📡 {ann.num_radar_pts} radar</span>
                   </div>
                 </div>
-                {isHighlighted && <span className="text-[#00e5ff] text-[9px] mt-1 shrink-0">●</span>}
+                {isHighlighted && <span className="text-cyan-400 text-[9px] mt-1 shrink-0">●</span>}
               </button>
             );
           })}

@@ -66,3 +66,8 @@ export interface Point3D {
 }
 
 export type ActiveTab = "cameras" | "lidar";
+
+export interface TransformData {
+  egoTranslation: [number, number, number];
+  sensorTranslation: [number, number, number];
+}
