@@ -8,7 +8,7 @@ export async function parsePCDBin(buffer: ArrayBuffer): Promise<Point3D[]> {
   for (let i = 0; i < count; i++) {
     const o = i * FLOATS * 4;
     pts.push({
-      x: view.getFloat32(o,     true),
+      x: view.getFloat32(o, true),
       y: view.getFloat32(o + 4, true),
       z: view.getFloat32(o + 8, true),
     });

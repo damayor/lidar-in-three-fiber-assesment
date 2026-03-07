@@ -1,15 +1,19 @@
 import { type FC } from "react";
 import { Html } from "@react-three/drei";
-import { getCategoryColor } from "../config/constants";
-import type { Annotation, TransformData } from "../interfaces/types";
+import { getCategoryColor } from "@config/constants";
+import type { Annotation, TransformData } from "@interfaces/types";
 
 interface AnnotationBoxesProps {
   annotations: Annotation[];
   highlightedToken: string | null;
-  transform: TransformData ;
+  transform: TransformData;
 }
 
-export const AnnotationBoxes: FC<AnnotationBoxesProps> = ({ annotations, highlightedToken, transform }) => {
+export const AnnotationBoxes: FC<AnnotationBoxesProps> = ({
+  annotations,
+  highlightedToken,
+  transform,
+}) => {
   const { egoTranslation, sensorTranslation } = transform;
 
   return (
@@ -39,14 +43,35 @@ export const AnnotationBoxes: FC<AnnotationBoxesProps> = ({ annotations, highlig
         const isHighlighted = ann.token === highlightedToken;
 
         return (
-          <group key={ann.token} position={[tx, ty, tz]} onClick={()=> (console.log(`Clicked on ${ann.category}`))}>
+          <group
+            key={ann.token}
+            position={[tx, ty, tz]}
+            onClick={() => console.log(`Clicked on ${ann.category}`)}
+          >
             <mesh>
-              <boxGeometry args={[w, h, l]} /> {/* swap h/l to match axis remap */}
-              <meshBasicMaterial color={color} wireframe opacity={isHighlighted ? 1.0 : 0.5} />
+              <boxGeometry args={[w, h, l]} />{" "}
+              {/* swap h/l to match axis remap */}
+              <meshBasicMaterial
+                color={color}
+                wireframe
+                opacity={isHighlighted ? 1.0 : 0.5}
+              />
             </mesh>
             {isHighlighted && (
-              <Html center distanceFactor={25}>
-                <div style={{ background:"rgba(0,0,0,.9)", border:`1px solid ${color}`, color, fontSize:9, fontFamily:"monospace", padding:"3px 8px", borderRadius:2, whiteSpace:"nowrap", pointerEvents:"none" }}>
+              <Html center distanceFactor={20}>
+                <div
+                  style={{
+                    background: "rgba(0,0,0,.9)",
+                    border: `1px solid ${color}`,
+                    color,
+                    fontSize: 12,
+                    fontFamily: "monospace",
+                    padding: "4px 8px",
+                    borderRadius: 2,
+                    whiteSpace: "nowrap",
+                    pointerEvents: "none",
+                  }}
+                >
                   {ann.category}
                 </div>
               </Html>
