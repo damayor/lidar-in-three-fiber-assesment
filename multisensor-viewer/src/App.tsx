@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, type FC } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Grid, Stats, Html } from "@react-three/drei";
+import { OrbitControls, Grid, Html, Stats } from "@react-three/drei";
 import * as THREE from "three";
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
@@ -44,7 +44,6 @@ interface Scene {
   last_sample_token: string;
   log_token: string;
 }
-
 interface SampleListItem {
   token: string;
   timestamp: number;
@@ -52,7 +51,6 @@ interface SampleListItem {
   next: string;
   anns_count: number;
 }
-
 interface SensorInfo {
   sample_data_token: string;
   filename: string;
@@ -60,7 +58,6 @@ interface SensorInfo {
   is_key_frame: boolean;
   timestamp: number;
 }
-
 interface Annotation {
   token: string;
   category: string;
@@ -71,7 +68,6 @@ interface Annotation {
   size: [number, number, number];
   rotation: [number, number, number, number];
 }
-
 interface SampleData {
   token: string;
   timestamp: number;
@@ -81,121 +77,18 @@ interface SampleData {
   sensors: Record<string, SensorInfo>;
   annotations: Annotation[];
 }
+interface ScenesResponse { total: number; offset: number; limit: number; scenes: Scene[]; }
+interface SceneSamplesResponse { scene_token: string; scene_name: string; total_samples: number; samples: SampleListItem[]; }
+interface Point3D { x: number; y: number; z: number; }
 
-interface ScenesResponse {
-  total: number;
-  offset: number;
-  limit: number;
-  scenes: Scene[];
-}
-
-interface SceneSamplesResponse {
-  scene_token: string;
-  scene_name: string;
-  total_samples: number;
-  samples: SampleListItem[];
-}
-
-interface Point3D {
-  x: number;
-  y: number;
-  z: number;
-}
-
-// ── GLOBAL STYLES ─────────────────────────────────────────────────────────────
-const GlobalStyles: FC = () => (
-  <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #080c10; --surface: #0d1117; --border: #1c2532;
-      --border-bright: #2d3f55; --accent: #00e5ff; --accent2: #ff6d00;
-      --text: #cdd9e5; --muted: #636e7b;
-      --font-display: 'Syne', sans-serif; --font-mono: 'Space Mono', monospace;
-    }
-    body { background: var(--bg); color: var(--text); font-family: var(--font-mono); }
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: var(--surface); }
-    ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
-
-    .app { display: grid; grid-template-rows: 56px 1fr; height: 100vh; overflow: hidden; }
-
-    .header { display: flex; align-items: center; gap: 16px; padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--border); position: relative; z-index: 10; }
-    .header-logo { font-family: var(--font-display); font-weight: 800; font-size: 18px; letter-spacing: -0.5px; color: #fff; }
-    .header-logo span { color: var(--accent); }
-    .header-sep { width: 1px; height: 24px; background: var(--border); }
-    .header-token { font-size: 11px; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #69f0ae; box-shadow: 0 0 8px #69f0ae; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-
-    .main { display: grid; grid-template-columns: 280px 1fr 300px; overflow: hidden; }
-
-    .sidebar { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
-    .sidebar-section { border-bottom: 1px solid var(--border); }
-    .sidebar-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; padding: 14px 16px 8px; }
-    .scene-item { padding: 10px 16px; cursor: pointer; border-left: 2px solid transparent; transition: all .15s; font-size: 12px; }
-    .scene-item:hover { background: rgba(0,229,255,.05); border-left-color: var(--accent); }
-    .scene-item.active { background: rgba(0,229,255,.08); border-left-color: var(--accent); color: var(--accent); }
-    .scene-name { font-weight: 700; font-size: 11px; }
-    .scene-meta { color: var(--muted); font-size: 10px; margin-top: 2px; }
-
-    .sample-list { max-height: 220px; overflow-y: auto; }
-    .sample-item { padding: 8px 16px; cursor: pointer; font-size: 11px; color: var(--muted); border-left: 2px solid transparent; transition: all .15s; display: flex; justify-content: space-between; align-items: center; }
-    .sample-item:hover { background: rgba(0,229,255,.04); color: var(--text); }
-    .sample-item.active { border-left-color: var(--accent); color: var(--accent); background: rgba(0,229,255,.06); }
-    .sample-idx { font-size: 10px; opacity: .5; }
-
-    .content { overflow-y: auto; display: flex; flex-direction: column; background: var(--bg); }
-
-    .tab-bar { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 16px; flex-shrink: 0; }
-    .tab { padding: 14px 18px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all .15s; }
-    .tab:hover { color: var(--text); }
-    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-    .camera-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; background: var(--border); }
-    .camera-cell { position: relative; background: #0a0e14; aspect-ratio: 16/9; overflow: hidden; }
-    .camera-cell img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s; }
-    .camera-cell:hover img { transform: scale(1.03); }
-    .camera-label { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,.75); backdrop-filter: blur(4px); border: 1px solid rgba(0,229,255,.3); color: var(--accent); font-size: 9px; font-weight: 700; letter-spacing: 1.5px; padding: 3px 7px; border-radius: 2px; }
-    .camera-missing { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 10px; }
-
-    .lidar-wrapper { position: relative; height: 480px; background: #050810; }
-    .lidar-hud { position: absolute; top: 12px; left: 12px; font-size: 10px; color: #636e7b; pointer-events: none; line-height: 1.8; }
-    .lidar-hint { position: absolute; bottom: 12px; right: 12px; font-size: 9px; color: #636e7b; pointer-events: none; text-align: right; line-height: 1.8; }
-
-    .ann-sidebar { background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
-    .ann-header { padding: 14px 16px 8px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; gap: 8px; }
-    .ann-title { font-family: var(--font-display); font-weight: 600; font-size: 13px; color: #fff; }
-    .ann-count { font-size: 10px; color: var(--accent); background: rgba(0,229,255,.1); border: 1px solid rgba(0,229,255,.2); padding: 1px 6px; border-radius: 10px; }
-    .ann-item { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-start; transition: background .1s; cursor: pointer; }
-    .ann-item:hover { background: rgba(255,255,255,.03); }
-    .ann-item.highlighted { background: rgba(0,229,255,.06); border-left: 2px solid var(--accent); }
-    .ann-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
-    .ann-body { flex: 1; min-width: 0; }
-    .ann-cat { font-size: 11px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ann-pts { font-size: 9px; color: var(--muted); margin-top: 3px; display: flex; gap: 8px; }
-    .ann-pts span { display: flex; align-items: center; gap: 3px; }
-
-    .sensor-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
-    .chip { font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 4px 8px; border-radius: 2px; border: 1px solid; }
-    .chip-cam   { color: var(--accent); border-color: rgba(0,229,255,.3);   background: rgba(0,229,255,.07); }
-    .chip-lidar { color: #69f0ae;       border-color: rgba(105,240,174,.3); background: rgba(105,240,174,.07); }
-    .chip-radar { color: #ffd740;       border-color: rgba(255,215,64,.3);  background: rgba(255,215,64,.07); }
-
-    .loading { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 12px; flex-direction: column; gap: 12px; }
-    .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  `}</style>
-);
-
-// ── PCD BINARY PARSER ─────────────────────────────────────────────────────────
+// ── PCD PARSER ────────────────────────────────────────────────────────────────
 async function parsePCDBin(buffer: ArrayBuffer): Promise<Point3D[]> {
   const view = new DataView(buffer);
-  const FLOATS_PER_PT = 5; // x y z intensity ring
-  const count = Math.floor(buffer.byteLength / (FLOATS_PER_PT * 4));
+  const FLOATS = 5; // x y z intensity ring
+  const count = Math.floor(buffer.byteLength / (FLOATS * 4));
   const pts: Point3D[] = [];
   for (let i = 0; i < count; i++) {
-    const o = i * FLOATS_PER_PT * 4;
+    const o = i * FLOATS * 4;
     pts.push({
       x: view.getFloat32(o,     true),
       y: view.getFloat32(o + 4, true),
@@ -205,164 +98,88 @@ async function parsePCDBin(buffer: ArrayBuffer): Promise<Point3D[]> {
   return pts;
 }
 
-// ── R3F: POINT CLOUD MESH ─────────────────────────────────────────────────────
-// This inner component runs INSIDE the <Canvas> context.
-// useMemo builds the BufferGeometry once per points array change.
-// useFrame is available here because we're inside Canvas.
-interface PointCloudProps {
-  points: Point3D[];
-}
+// ── R3F: POINT CLOUD ─────────────────────────────────────────────────────────
+const PointCloud: FC<{ points: Point3D[] }> = ({ points }) => {
+  const ref = useRef<THREE.Points>(null);
 
-const PointCloud: FC<PointCloudProps> = ({ points }) => {
-  const meshRef = useRef<THREE.Points>(null);
-
-  // Build BufferGeometry from raw Point3D array
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
-    const positions = new Float32Array(points.length * 3);
-    const colors    = new Float32Array(points.length * 3);
-    const c         = new THREE.Color();
-
+    const pos = new Float32Array(points.length * 3);
+    const col = new Float32Array(points.length * 3);
+    const c   = new THREE.Color();
     points.forEach((p, i) => {
-      positions[i * 3]     = p.x;
-      positions[i * 3 + 1] = p.y;
-      positions[i * 3 + 2] = p.z;
-      // Height-based HSL coloring: blue (low) → green → red (high)
+      pos[i*3]=p.x; pos[i*3+1]=p.y; pos[i*3+2]=p.z;
       const t = Math.min(Math.max((p.z + 2) / 5, 0), 1);
-      c.setHSL(0.55 - t * 0.55, 1.0, 0.55);
-      colors[i * 3]     = c.r;
-      colors[i * 3 + 1] = c.g;
-      colors[i * 3 + 2] = c.b;
+      c.setHSL(0.55 - t * 0.55, 1, 0.55);
+      col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
     });
-
-    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute("color",    new THREE.BufferAttribute(colors, 3));
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("color",    new THREE.BufferAttribute(col, 3));
     return geo;
   }, [points]);
 
-  // Slow idle rotation — stops when user interacts (OrbitControls takes over)
-  useFrame((_, delta) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.z += delta * 0.03;
-    }
-  });
+  // Slow idle rotation — OrbitControls pauses this when user interacts
+  useFrame((_, dt) => { if (ref.current) ref.current.rotation.z += dt * 0.025; });
 
   return (
-    <points ref={meshRef} geometry={geometry}>
-      <pointsMaterial
-        size={0.07}
-        vertexColors
-        sizeAttenuation
-        transparent
-        opacity={0.9}
-      />
+    <points ref={ref} geometry={geometry}>
+      <pointsMaterial size={0.07} vertexColors sizeAttenuation transparent opacity={0.9} />
     </points>
   );
 };
 
-// ── R3F: ANNOTATION BOXES ─────────────────────────────────────────────────────
-// Renders wireframe bounding boxes for each annotation in 3D space.
-interface AnnotationBoxesProps {
+// ── R3F: BOUNDING BOXES ───────────────────────────────────────────────────────
+// FIX: compute centroid of point cloud to offset annotation world coords
+const AnnotationBoxes: FC<{
   annotations: Annotation[];
   highlightedToken: string | null;
-}
+  centroid: [number, number, number];
+}> = ({ annotations, highlightedToken, centroid }) => (
+  <>
+    {annotations.map((ann) => {
+      const [w, l, h] = ann.size;
+      // Offset world coords by point cloud centroid so boxes align with points
+      const x = ann.translation[0] - centroid[0];
+      const y = ann.translation[1] - centroid[1];
+      const z = ann.translation[2] - centroid[2];
+      const color = getCategoryColor(ann.category);
+      const isHighlighted = ann.token === highlightedToken;
 
-const AnnotationBoxes: FC<AnnotationBoxesProps> = ({ annotations, highlightedToken }) => {
-  return (
-    <>
-      {annotations.map((ann) => {
-        const [w, l, h] = ann.size;          // width, length, height
-        const [x, y, z] = ann.translation;   // world position
-        const color = getCategoryColor(ann.category);
-        const isHighlighted = ann.token === highlightedToken;
+      return (
+        <group key={ann.token} position={[x, y, z]}>
+          <mesh>
+            <boxGeometry args={[w, l, h]} />
+            <meshBasicMaterial
+              color={color}
+              wireframe
+              transparent
+              opacity={isHighlighted ? 1.0 : 0.45}
+            />
+          </mesh>
+          {isHighlighted && (
+            <Html center distanceFactor={25}>
+              <div style={{
+                background: "rgba(0,0,0,.9)",
+                border: `1px solid ${color}`,
+                color,
+                fontSize: 9,
+                fontFamily: "monospace",
+                padding: "3px 8px",
+                borderRadius: 2,
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+              }}>
+                {ann.category}
+              </div>
+            </Html>
+          )}
+        </group>
+      );
+    })}
+  </>
+);
 
-        return (
-          <group key={ann.token} position={[x - 400, y - 1150, z]}>
-            {/* Wireframe box */}
-            <mesh>
-              <boxGeometry args={[w, l, h]} />
-              <meshBasicMaterial
-                color={color}
-                wireframe
-                opacity={isHighlighted ? 1 : 0.5}
-                transparent
-              />
-            </mesh>
-            {/* Label visible on highlight */}
-            {isHighlighted && (
-              <Html center distanceFactor={30}>
-                <div style={{
-                  background: "rgba(0,0,0,.85)",
-                  border: `1px solid ${color}`,
-                  color,
-                  fontSize: 9,
-                  fontFamily: "Space Mono, monospace",
-                  padding: "3px 7px",
-                  borderRadius: 2,
-                  whiteSpace: "nowrap",
-                  pointerEvents: "none",
-                }}>
-                  {ann.category}
-                </div>
-              </Html>
-            )}
-          </group>
-        );
-      })}
-    </>
-  );
-};
-
-// ── R3F: LIDAR SCENE (inside Canvas) ─────────────────────────────────────────
-interface LidarSceneProps {
-  points: Point3D[];
-  annotations: Annotation[];
-  highlightedToken: string | null;
-}
-
-const LidarScene: FC<LidarSceneProps> = ({ points, annotations, highlightedToken }) => {
-  return (
-    <>
-      {/* Ambient + directional light (needed for future mesh objects) */}
-      <ambientLight intensity={0.3} />
-      <pointLight position={[10, 10, 10]} intensity={0.5} />
-
-      {/* The actual point cloud */}
-      <PointCloud points={points} />
-
-      {/* Bounding box annotations */}
-      <AnnotationBoxes annotations={annotations} highlightedToken={highlightedToken} />
-
-      {/* Reference ground grid from drei */}
-      <Grid
-        args={[100, 100]}
-        cellSize={2}
-        cellThickness={0.4}
-        cellColor="#1c2532"
-        sectionSize={10}
-        sectionThickness={0.8}
-        sectionColor="#2d3f55"
-        fadeDistance={80}
-        fadeStrength={1}
-        followCamera={false}
-        position={[0, 0, -2]}
-      />
-
-      {/* Full orbit controls from drei — replaces manual mouse math */}
-      <OrbitControls
-        makeDefault
-        enableDamping
-        dampingFactor={0.08}
-        rotateSpeed={0.6}
-        zoomSpeed={0.8}
-        minDistance={5}
-        maxDistance={120}
-      />
-    </>
-  );
-};
-
-// ── LIDAR VIEWER (wrapper with Canvas) ───────────────────────────────────────
+// ── R3F: LIDAR VIEWER ────────────────────────────────────────────────────────
 interface LidarViewerProps {
   points: Point3D[] | null;
   annotations: Annotation[];
@@ -370,44 +187,69 @@ interface LidarViewerProps {
 }
 
 const LidarViewer: FC<LidarViewerProps> = ({ points, annotations, highlightedToken }) => {
-  if (!points) {
-    return (
-      <div className="lidar-wrapper">
-        <div className="loading"><div className="spinner" /><span>Loading LiDAR...</span></div>
-      </div>
-    );
-  }
-  if (points.length === 0) {
-    return (
-      <div className="lidar-wrapper">
-        <div className="loading"><span>No LiDAR data available for this frame</span></div>
-      </div>
-    );
-  }
+  // Compute centroid once so boxes align with the point cloud
+  const centroid = useMemo((): [number, number, number] => {
+    if (!points || points.length === 0) return [0, 0, 0];
+    let sx = 0, sy = 0, sz = 0;
+    for (const p of points) { sx += p.x; sy += p.y; sz += p.z; }
+    const n = points.length;
+    return [sx / n, sy / n, sz / n];
+  }, [points]);
+
+  if (!points) return (
+    <div className="flex items-center justify-center h-[480px] bg-[#050810] flex-col gap-3">
+      <div className="w-6 h-6 border-2 border-[#1c2532] border-t-[#00e5ff] rounded-full animate-spin" />
+      <span className="text-[#636e7b] text-xs font-mono">Loading LiDAR...</span>
+    </div>
+  );
+
+  if (points.length === 0) return (
+    <div className="flex items-center justify-center h-[480px] bg-[#050810]">
+      <span className="text-[#636e7b] text-xs font-mono">No LiDAR data for this frame</span>
+    </div>
+  );
 
   return (
-    <div className="lidar-wrapper">
-      {/* React Three Fiber Canvas — declarative WebGL */}
+    <div className="relative h-[480px] bg-[#050810]">
       <Canvas
         camera={{ position: [0, -40, 25], fov: 60, near: 0.1, far: 1000 }}
         gl={{ antialias: true, alpha: true }}
         style={{ background: "#050810" }}
       >
-        {/* Stats overlay (FPS / draw calls) — remove in production */}
-        <Stats className="r3f-stats" />
-
-        <LidarScene
-          points={points}
+        <Stats />
+        <ambientLight intensity={0.3} />
+        <PointCloud points={points} />
+        <AnnotationBoxes
           annotations={annotations}
           highlightedToken={highlightedToken}
+          centroid={centroid}
+        />
+        <Grid
+          args={[120, 120]}
+          cellSize={2}
+          cellColor="#1c2532"
+          sectionSize={10}
+          sectionColor="#2d3f55"
+          fadeDistance={90}
+          position={[0, 0, -3]}
+        />
+        <OrbitControls
+          makeDefault
+          enableDamping
+          dampingFactor={0.08}
+          rotateSpeed={0.6}
+          zoomSpeed={0.8}
+          minDistance={4}
+          maxDistance={140}
         />
       </Canvas>
 
-      <div className="lidar-hud">
-        LIDAR_TOP · {points.length.toLocaleString()} pts<br />
-        BOXES · {annotations.length} objects
+      {/* HUD overlays */}
+      <div className="absolute top-3 left-3 text-[10px] font-mono text-[#636e7b] pointer-events-none leading-relaxed">
+        <span className="text-[#69f0ae]">LIDAR_TOP</span> · {points.length.toLocaleString()} pts<br />
+        <span className="text-[#00e5ff]">BOXES</span> · {annotations.length} objects
       </div>
-      <div className="lidar-hint">
+      <div className="absolute bottom-3 right-3 text-[9px] font-mono text-[#636e7b] pointer-events-none text-right leading-loose">
         Left drag → rotate<br />
         Right drag → pan<br />
         Scroll → zoom
@@ -416,16 +258,111 @@ const LidarViewer: FC<LidarViewerProps> = ({ points, annotations, highlightedTok
   );
 };
 
-// ── HELPERS ───────────────────────────────────────────────────────────────────
-type ActiveTab = "cameras" | "lidar";
+// ── CHIP helper ───────────────────────────────────────────────────────────────
+const SensorChip: FC<{ channel: string }> = ({ channel }) => {
+  const isCam   = channel.startsWith("CAM");
+  const isLidar = channel.startsWith("LIDAR");
+  const base = "text-[9px] font-bold tracking-widest px-2 py-1 rounded-sm border font-mono";
+  const variant = isCam
+    ? "text-[#00e5ff] border-[#00e5ff]/30 bg-[#00e5ff]/07"
+    : isLidar
+      ? "text-[#69f0ae] border-[#69f0ae]/30 bg-[#69f0ae]/07"
+      : "text-[#ffd740] border-[#ffd740]/30 bg-[#ffd740]/07";
+  return <span className={`${base} ${variant}`}>{channel.replace(/_/g, " ")}</span>;
+};
 
-const getChipClass = (channel: string): string => {
-  if (channel.startsWith("CAM"))   return "chip chip-cam";
-  if (channel.startsWith("LIDAR")) return "chip chip-lidar";
-  return "chip chip-radar";
+// ── TIMELINE ─────────────────────────────────────────────────────────────────
+interface TimelineProps {
+  samples: SampleListItem[];
+  selectedToken: string | null;
+  onSelect: (s: SampleListItem) => void;
+}
+
+const Timeline: FC<TimelineProps> = ({ samples, selectedToken, onSelect }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const selectedIdx = samples.findIndex(s => s.token === selectedToken);
+
+  // Auto-scroll selected frame into view
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    const el = scrollRef.current.querySelector(`[data-active="true"]`) as HTMLElement | null;
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [selectedToken]);
+
+  if (samples.length === 0) return null;
+
+  return (
+    <div className="border-t border-[#1c2532] bg-[#0d1117] flex-shrink-0">
+      {/* Header bar */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-[#1c2532]">
+        <span className="text-[9px] font-bold tracking-[2px] text-[#636e7b] uppercase font-mono">Timeline</span>
+        <div className="flex-1 h-px bg-[#1c2532]" />
+        <span className="text-[9px] font-mono text-[#636e7b]">
+          {selectedIdx + 1} / {samples.length}
+        </span>
+        {/* Prev / Next buttons */}
+        <button
+          onClick={() => selectedIdx > 0 && onSelect(samples[selectedIdx - 1])}
+          disabled={selectedIdx <= 0}
+          className="text-[10px] font-mono text-[#636e7b] hover:text-[#00e5ff] disabled:opacity-20 px-1 transition-colors"
+        >
+          ◀
+        </button>
+        <button
+          onClick={() => selectedIdx < samples.length - 1 && onSelect(samples[selectedIdx + 1])}
+          disabled={selectedIdx >= samples.length - 1}
+          className="text-[10px] font-mono text-[#636e7b] hover:text-[#00e5ff] disabled:opacity-20 px-1 transition-colors"
+        >
+          ▶
+        </button>
+      </div>
+
+      {/* Scrollable frame strip */}
+      <div ref={scrollRef} className="flex items-center gap-1 px-3 py-2 overflow-x-auto scrollbar-thin">
+        {/* Timeline track line */}
+        <div className="absolute left-0 right-0 h-px bg-[#1c2532] pointer-events-none" style={{ top: "50%" }} />
+
+     {/* //aca va */}
+
+
+
+
+
+
+      {samples.map((s, i) => {
+          const isActive = s.token === selectedToken;
+          return (
+            <button
+              key={s.token}
+              data-active={isActive}
+              onClick={() => onSelect(s)}
+              title={`Frame ${i + 1} · ${s.anns_count} ann`}
+              className="relative flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full transition-all duration-150 group"
+            >
+              <div className={`w-2.5 h-2.5 rounded-full border transition-all duration-150 ${
+                isActive
+                  ? "bg-[#00e5ff] border-[#00e5ff] scale-125 shadow-[0_0_6px_#00e5ff]"
+                  : "bg-[#1c2532] border-[#2d3f55] group-hover:bg-[#636e7b] group-hover:border-[#636e7b]"
+              }`} />
+            </button>
+        )}
+      )}
+
+
+
+
+
+
+
+
+      </div>
+    </div>
+  );
 };
 
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
+type ActiveTab = "cameras" | "lidar";
+
 export default function App() {
   const [scenes,           setScenes]           = useState<Scene[]>([]);
   const [selectedScene,    setSelectedScene]    = useState<Scene | null>(null);
@@ -434,18 +371,16 @@ export default function App() {
   const [sampleData,       setSampleData]       = useState<SampleData | null>(null);
   const [lidarPoints,      setLidarPoints]      = useState<Point3D[] | null>(null);
   const [activeTab,        setActiveTab]        = useState<ActiveTab>("cameras");
-  const [loadingScenes,    setLoadingScenes]    = useState<boolean>(true);
+  const [loadingScenes,    setLoadingScenes]    = useState(true);
   const [highlightedToken, setHighlightedToken] = useState<string | null>(null);
 
-  // Load scenes
   useEffect(() => {
     fetch(`${API}/scenes?limit=20`)
-      .then((r) => r.json() as Promise<ScenesResponse>)
-      .then((d) => { setScenes(d.scenes ?? []); setLoadingScenes(false); })
+      .then(r => r.json() as Promise<ScenesResponse>)
+      .then(d => { setScenes(d.scenes ?? []); setLoadingScenes(false); })
       .catch(() => setLoadingScenes(false));
   }, []);
 
-  // Load samples when scene changes
   useEffect(() => {
     if (!selectedScene) return;
     setSceneSamples([]);
@@ -453,8 +388,8 @@ export default function App() {
     setSelectedSample(null);
     setLidarPoints(null);
     fetch(`${API}/scenes/${selectedScene.token}/samples`)
-      .then((r) => r.json() as Promise<SceneSamplesResponse>)
-      .then((d) => {
+      .then(r => r.json() as Promise<SceneSamplesResponse>)
+      .then(d => {
         setSceneSamples(d.samples ?? []);
         if (d.samples?.length) selectSample(d.samples[0]);
       });
@@ -466,14 +401,14 @@ export default function App() {
     setLidarPoints(null);
     setHighlightedToken(null);
     fetch(`${API}/samples/${sample.token}`)
-      .then((r) => r.json() as Promise<SampleData>)
-      .then((d) => {
+      .then(r => r.json() as Promise<SampleData>)
+      .then(d => {
         setSampleData(d);
         const lidar = d.sensors?.LIDAR_TOP;
         if (lidar?.filename) {
           fetch(`${API}/data/${lidar.filename}`)
-            .then((r) => r.arrayBuffer())
-            .then((buf) => parsePCDBin(buf).then(setLidarPoints))
+            .then(r => r.arrayBuffer())
+            .then(buf => parsePCDBin(buf).then(setLidarPoints))
             .catch(() => setLidarPoints([]));
         }
       });
@@ -483,100 +418,104 @@ export default function App() {
   const annotations = sampleData?.annotations ?? [];
 
   return (
-    <>
-      <GlobalStyles />
-      <div className="app">
+    <div className="h-screen bg-[#080c10] text-[#cdd9e5] font-mono flex flex-col overflow-hidden">
 
-        {/* HEADER */}
-        <header className="header">
-          <div className="header-logo">nu<span>SCENES</span></div>
-          <div className="header-sep" />
-          <div className="header-token">
-            {selectedSample ? `FRAME · ${selectedSample.token}` : "Select a scene to begin"}
+      {/* ── HEADER ── */}
+      <header className="flex items-center gap-4 px-6 h-14 bg-[#0d1117] border-b border-[#1c2532] shrink-0 z-10">
+        <span className="font-['Syne'] font-extrabold text-lg tracking-tight text-white">
+          nu<span className="text-[#00e5ff]">SCENES</span>
+        </span>
+        <div className="w-px h-6 bg-[#1c2532]" />
+        <span className="text-[11px] text-[#636e7b] flex-1 truncate">
+          {selectedSample ? `FRAME · ${selectedSample.token}` : "Select a scene to begin"}
+        </span>
+        <div className="w-2 h-2 rounded-full bg-[#69f0ae] shadow-[0_0_8px_#69f0ae] animate-pulse" title="API connected" />
+      </header>
+
+      {/* ── BODY (sidebar + content + annotations) ── */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* LEFT SIDEBAR — only scenes now */}
+        <aside className="w-64 bg-[#0d1117] border-r border-[#1c2532] flex flex-col overflow-y-auto shrink-0">
+          <div className="px-4 py-3 text-[10px] font-bold tracking-[2px] text-[#636e7b] uppercase border-b border-[#1c2532]">
+            Scenes
           </div>
-          <div className="status-dot" title="API connected" />
-        </header>
+          {loadingScenes ? (
+            <div className="flex items-center justify-center h-20">
+              <div className="w-5 h-5 border-2 border-[#1c2532] border-t-[#00e5ff] rounded-full animate-spin" />
+            </div>
+          ) : (
+            scenes.map(s => (
+              <button
+                key={s.token}
+                onClick={() => setSelectedScene(s)}
+                className={`
+                  w-full text-left px-4 py-3 border-l-2 transition-all text-xs
+                  ${selectedScene?.token === s.token
+                    ? "border-[#00e5ff] bg-[#00e5ff]/08 text-[#00e5ff]"
+                    : "border-transparent hover:border-cya [#00e5ff] hover:bg-[#00e5ff]/05 text-[#cdd9e5]"
+                  }
+                `}
+              >
+                <div className="font-bold text-[11px]">{s.name}</div>
+                <div className="text-[#636e7b] text-[10px] mt-0.5">
+                  {s.nbr_samples} frames · {s.description?.slice(0, 36) || "—"}
+                </div>
+              </button>
+            ))
+          )}
+        </aside>
 
-        <div className="main">
-
-          {/* LEFT SIDEBAR */}
-          <aside className="sidebar">
-            <div className="sidebar-section">
-              <div className="sidebar-label">Scenes</div>
-              {loadingScenes
-                ? <div className="loading" style={{ height: 80 }}><div className="spinner" /></div>
-                : scenes.map((s) => (
-                    <div
-                      key={s.token}
-                      className={`scene-item ${selectedScene?.token === s.token ? "active" : ""}`}
-                      onClick={() => setSelectedScene(s)}
-                    >
-                      <div className="scene-name">{s.name}</div>
-                      <div className="scene-meta">{s.nbr_samples} frames · {s.description?.slice(0, 40) || "—"}</div>
-                    </div>
-                  ))
+        {/* CENTER — tabs + content */}
+        <main className="flex-1 flex flex-col overflow-hidden bg-[#080c10]">
+          {!sampleData ? (
+            <div className="flex-1 flex items-center justify-center flex-col gap-3">
+              {selectedScene
+                ? <><div className="w-6 h-6 border-2 border-[#1c2532] border-t-[#00e5ff] rounded-full animate-spin" /><span className="text-[#636e7b] text-xs">Loading frame...</span></>
+                : <span className="text-[#636e7b] text-sm">← Pick a scene from the left</span>
               }
             </div>
-
-            {sceneSamples.length > 0 && (
-              <div className="sidebar-section">
-                <div className="sidebar-label">Frames ({sceneSamples.length})</div>
-                <div className="sample-list">
-                  {sceneSamples.map((s, i) => (
-                    <div
-                      key={s.token}
-                      className={`sample-item ${selectedSample?.token === s.token ? "active" : ""}`}
-                      onClick={() => selectSample(s)}
-                    >
-                      <span>Frame {String(i + 1).padStart(3, "0")}</span>
-                      <span className="sample-idx">{s.anns_count} ann</span>
-                    </div>
-                  ))}
-                </div>
+          ) : (
+            <>
+              {/* Sensor chips */}
+              <div className="flex flex-wrap gap-1.5 px-4 py-3 border-b border-[#1c2532] shrink-0">
+                {Object.keys(sensors).map(ch => <SensorChip key={ch} channel={ch} />)}
               </div>
-            )}
-          </aside>
 
-          {/* CENTER CONTENT */}
-          <main className="content">
-            {!sampleData ? (
-              <div className="loading" style={{ height: "100%" }}>
-                {selectedScene
-                  ? <><div className="spinner" /><span>Loading frame data...</span></>
-                  : <span style={{ color: "var(--muted)", fontSize: 13 }}>← Pick a scene</span>
-                }
+              {/* Tab bar */}
+              <div className="flex border-b border-[#1c2532] bg-[#0d1117] px-4 shrink-0">
+                {(["cameras", "lidar"] as ActiveTab[]).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setActiveTab(t)}
+                    className={`
+                      px-4 py-3.5 text-[11px] font-bold tracking-widest uppercase border-b-2 transition-all
+                      ${activeTab === t
+                        ? "text-[#00e5ff] border-[#00e5ff]"
+                        : "text-[#636e7b] border-transparent hover:text-[#cdd9e5]"
+                      }
+                    `}
+                  >
+                    {t === "cameras" ? "📷 Cameras" : "🔵 LiDAR + Boxes"}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <>
-                <div className="sensor-chips">
-                  {Object.keys(sensors).map((ch) => (
-                    <span key={ch} className={getChipClass(ch)}>{ch.replace(/_/g, " ")}</span>
-                  ))}
-                </div>
 
-                <div className="tab-bar">
-                  {(["cameras", "lidar"] as ActiveTab[]).map((t) => (
-                    <div
-                      key={t}
-                      className={`tab ${activeTab === t ? "active" : ""}`}
-                      onClick={() => setActiveTab(t)}
-                    >
-                      {t === "cameras" ? "📷 Cameras" : "🔵 LiDAR + Boxes"}
-                    </div>
-                  ))}
-                </div>
-
+              {/* Tab content */}
+              <div className="flex-1 overflow-auto">
                 {activeTab === "cameras" && (
-                  <div className="camera-grid">
+                  <div className="grid grid-cols-3 gap-0.5 p-0.5 bg-[#1c2532]">
                     {CAMERA_CHANNELS.map((ch: CameraChannel) => {
                       const s = sensors[ch];
                       return (
-                        <div key={ch} className="camera-cell">
+                        <div key={ch} className="relative bg-[#0a0e14] aspect-video overflow-hidden group">
                           {s?.filename
-                            ? <img src={`${API}/data/${s.filename}`} alt={ch} loading="lazy" />
-                            : <div className="camera-missing">No image</div>
+                            ? <img src={`${API}/data/${s.filename}`} alt={ch} loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                            : <div className="w-full h-full flex items-center justify-center text-[#636e7b] text-[10px]">No image</div>
                           }
-                          <div className="camera-label">{ch.replace("CAM_", "").replace(/_/g, " ")}</div>
+                          <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-sm border border-[#00e5ff]/30 text-[#00e5ff] text-[9px] font-bold tracking-[1.5px] px-1.5 py-0.5 rounded-sm">
+                            {ch.replace("CAM_", "").replace(/_/g, " ")}
+                          </div>
                         </div>
                       );
                     })}
@@ -590,45 +529,80 @@ export default function App() {
                     highlightedToken={highlightedToken}
                   />
                 )}
-              </>
-            )}
-          </main>
-
-          {/* RIGHT SIDEBAR — ANNOTATIONS */}
-          <aside className="ann-sidebar">
-            <div className="ann-header">
-              <span className="ann-title">Annotations</span>
-              {annotations.length > 0 && <span className="ann-count">{annotations.length}</span>}
-            </div>
-
-            {annotations.length === 0 ? (
-              <div className="loading" style={{ height: 120 }}>
-                <span>No frame selected</span>
               </div>
-            ) : (
-              annotations.map((ann: Annotation, i: number) => (
-                <div
-                  key={ann.token || i}
-                  className={`ann-item ${highlightedToken === ann.token ? "highlighted" : ""}`}
-                  onClick={() => {
-                    setHighlightedToken(highlightedToken === ann.token ? null : ann.token);
-                    setActiveTab("lidar");
-                  }}
-                >
-                  <div className="ann-dot" style={{ background: getCategoryColor(ann.category) }} />
-                  <div className="ann-body">
-                    <div className="ann-cat" title={ann.category}>{ann.category}</div>
-                    <div className="ann-pts">
-                      <span>🔵 {ann.num_lidar_pts} lidar</span>
-                      <span>📡 {ann.num_radar_pts} radar</span>
-                    </div>
+            </>
+          )}
+
+          {/* ── TIMELINE at the bottom of center ── */}
+          <Timeline
+            samples={sceneSamples}
+            selectedToken={selectedSample?.token ?? null}
+            onSelect={selectSample}
+          />
+        </main>
+
+        {/* RIGHT SIDEBAR — annotations */}
+        <aside className="w-72 bg-[#0d1117] border-l border-[#1c2532] flex flex-col overflow-y-auto shrink-0">
+          <div className="flex items-baseline gap-2 px-4 py-3 border-b border-[#1c2532] shrink-0">
+            <span className="font-['Syne'] font-semibold text-[13px] text-white">Annotations</span>
+            {annotations.length > 0 && (
+              <span className="text-[10px] text-[#00e5ff] bg-[#00e5ff]/10 border border-[#00e5ff]/20 px-1.5 py-0.5 rounded-full">
+                {annotations.length}
+              </span>
+            )}
+            {highlightedToken && (
+              <button
+                onClick={() => setHighlightedToken(null)}
+                className="ml-auto text-[9px] text-[#636e7b] hover:text-[#ff6d00] transition-colors"
+              >
+                ✕ clear
+              </button>
+            )}
+          </div>
+
+          {annotations.length === 0 ? (
+            <div className="flex items-center justify-center h-28 text-[#636e7b] text-xs">
+              No frame selected
+            </div>
+          ) : (
+            <div className="text-[10px] text-[#636e7b] px-4 py-2 border-b border-[#1c2532]">
+              Click an annotation to highlight it in the LiDAR view
+            </div>
+          )}
+
+          {annotations.map((ann, i) => {
+            const color = getCategoryColor(ann.category);
+            const isHighlighted = highlightedToken === ann.token;
+            return (
+              <button
+                key={ann.token || i}
+                onClick={() => {
+                  setHighlightedToken(isHighlighted ? null : ann.token);
+                  setActiveTab("lidar");
+                }}
+                className={`
+                  w-full text-left flex gap-2.5 items-start px-3.5 py-2.5
+                  border-b border-[#1c2532] border-l-2 transition-all
+                  ${isHighlighted
+                    ? "bg-[#00e5ff]/06 border-l-[#00e5ff]"
+                    : "border-l-transparent hover:bg-white/[0.02] hover:border-l-[#2d3f55]"
+                  }
+                `}
+              >
+                <div className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: color, boxShadow: isHighlighted ? `0 0 6px ${color}` : "none" }} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-bold text-[#cdd9e5] truncate">{ann.category}</div>
+                  <div className="flex gap-2 mt-0.5 text-[9px] text-[#636e7b]">
+                    <span>🔵 {ann.num_lidar_pts} lidar</span>
+                    <span>📡 {ann.num_radar_pts} radar</span>
                   </div>
                 </div>
-              ))
-            )}
-          </aside>
-        </div>
+                {isHighlighted && <span className="text-[#00e5ff] text-[9px] mt-1 shrink-0">●</span>}
+              </button>
+            );
+          })}
+        </aside>
       </div>
-    </>
+    </div>
   );
 }
