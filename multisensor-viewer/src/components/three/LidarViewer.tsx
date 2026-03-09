@@ -3,7 +3,6 @@ import { Canvas } from "@react-three/fiber";
 import {
   OrbitControls,
   Grid,
-  Stats,
   GizmoHelper,
   GizmoViewport,
   Html,
@@ -91,7 +90,6 @@ export const LidarViewer: FC<LidarViewerProps> = ({
         gl={{ antialias: true, alpha: true }}
         style={{ background: "#050810" }}
       >
-        <Stats />
         <ambientLight intensity={LIGHT_INTENSITY} />
         <PointCloud points={points} />
         {transformData ? (
@@ -120,7 +118,7 @@ export const LidarViewer: FC<LidarViewerProps> = ({
           </Html>
         )}
 
-        <GizmoHelper alignment={"top-left"}>
+        <GizmoHelper alignment={"top-right"}>
           <GizmoViewport />
         </GizmoHelper>
         <Grid

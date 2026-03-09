@@ -217,10 +217,9 @@ def inspect_quality_mock(
     import copy
     mock_sample = copy.deepcopy(sample)
 
-    if drop_sensor:  # solo ejecuta si vino un valor, no si es None
+    if drop_sensor:
         mock_sample["data"].pop(drop_sensor, None)
 
-    # CAMBIO 3: vaciar annotations si el flag está activo
     if drop_annotations:
         mock_sample["anns"] = []
 
