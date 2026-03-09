@@ -3,6 +3,7 @@ import {
   API,
   CAMERA_CHANNELS,
   getCategoryColor,
+  QUALITY_STYLE,
   type CameraChannel,
 } from "./config/constants";
 import {
@@ -19,6 +20,8 @@ import { parsePCDBin } from "./utils/pcdParser";
 import { SensorChip } from "@components/ui/SensorChip";
 import { Timeline } from "@components/ui/Timeline";
 import { LidarViewer } from "@components/three/LidarViewer";
+import { SimulationPanel } from "@components/ui/SimulationPanel";
+import { QualityBanner } from "@components/ui/QualityBanner";
 
 export default function App() {
   const [scenes, setScenes] = useState<Scene[]>([]);
@@ -35,6 +38,11 @@ export default function App() {
   const [transformData, setTransformData] = useState<TransformData | null>(
     null,
   );
+  const [serverDown,       setServerDown]       = useState(false);
+
+  // Mock state additions
+  const [mockSensor,      setMockSensor]      = useState<string | null>(null);
+  const [mockDropAnns,    setMockDropAnns]    = useState<boolean>(false);
 
   useEffect(() => {
     fetch(`${API}/scenes?limit=20`)
@@ -43,18 +51,38 @@ export default function App() {
         setScenes(d.scenes ?? []);
         setLoadingScenes(false);
       })
-      .catch(() => setLoadingScenes(false));
+      .catch(() => {
+        setLoadingScenes(false)
+        setServerDown(true)
+      });
   }, []);
 
-  const selectSample = (sample: SampleListItem): void => {
+  const selectSample = (sample: SampleListItem, dropSensor?: string | null, dropAnns?: boolean): void => {
     console.log("sample token", sample.token);
     setSelectedSample(sample);
     setSampleData(null);
     setLidarPoints(null);
     setHighlightedToken(null);
-    fetch(`${API}/samples/${sample.token}`)
+
+    // Build query string only if mocking
+    const params = new URLSearchParams();
+    if (dropSensor)  params.set("drop_sensor", dropSensor);
+    if (dropAnns)    params.set("drop_annotations", "true");
+    const qs = params.size ? `?${params}` : "";
+
+    fetch(`${API}/samples/${sample.token}${qs}`)
       .then((r) => r.json() as Promise<SampleData>)
       .then((d) => {
+        const q = d.quality;
+        //wow!
+        const logFn = q.overall_status === "PASS"    ? console.info
+                    : q.overall_status === "WARNING"  ? console.warn
+                    : console.error;
+        logFn(
+          `[nuScenes quality] ${q.overall_status} — frame ${sample.token}`,
+          q.checks.map(c => `${c.name}: ${c.status} — ${c.message}`)
+        );
+
         setSampleData(d);
         const lidar = d.sensors?.LIDAR_TOP;
         if (lidar?.filename) {
@@ -75,10 +103,17 @@ export default function App() {
       });
   };
 
+  // Handler called by SimulationPanel
+  const handleSimulate = (dropSensor: string | null, dropAnns: boolean): void => {
+    setMockSensor(dropSensor);
+    setMockDropAnns(dropAnns);
+    if (selectedSample) selectSample(selectedSample, dropSensor, dropAnns);
+  };
+
   //ToImport hook setXXX(null) is causing re render triggered by Eslint
   useEffect(() => {
     if (!selectedScene) return;
-    // setSceneSamples([]);
+    setSceneSamples([]);
     setSampleData(null);
     setSelectedSample(null);
     setLidarPoints(null);
@@ -93,6 +128,7 @@ export default function App() {
 
   const sensors = sampleData?.sensors ?? {};
   const annotations = sampleData?.annotations ?? [];
+  const quality     = sampleData?.quality     ?? null;
 
   return (
     <div className="h-screen bg-[#080c10] text-[#cdd9e5] font-mono flex flex-col overflow-hidden">
@@ -107,6 +143,12 @@ export default function App() {
             ? `FRAME · ${selectedSample.token}`
             : "Select a scene to begin"}
         </span>
+        {/* NEW: overall quality badge in header when a frame is loaded */}
+        {quality && (
+          <span className={`text-[10px] font-bold tracking-widest px-2.5 py-1 rounded-sm border font-mono ${QUALITY_STYLE[quality.overall_status].badge}`}>
+            {quality.overall_status}
+          </span>
+        )}
         <div
           className="w-2 h-2 rounded-full bg-[#69f0ae] shadow-[0_0_8px_#69f0ae] animate-pulse"
           title="API connected"
@@ -145,24 +187,33 @@ export default function App() {
               </button>
             ))
           )}
+          {/* SIMULATION PANEL — bottom of right sidebar */}
+          <div className="mt-auto border-t border-[#1c2532] p-3 shrink-0">
+            <SimulationPanel
+              availableSensors={Object.keys(sensors)}
+              mockState={mockSensor || mockDropAnns
+                ? { drop_sensor: mockSensor, drop_annotations: mockDropAnns }
+                : null
+              }
+              onSimulate={handleSimulate}
+            />
+          </div>
         </aside>
 
         {/* CENTER — tabs + content */}
         <main className="flex-1 flex flex-col overflow-hidden bg-[#080c10]">
-          {!sampleData ? (
+          {serverDown ? (
             <div className="flex-1 flex items-center justify-center flex-col gap-3">
-              {selectedScene ? (
-                <>
-                  <div className="w-6 h-6 border-2 border-[#1c2532] border-t-cyan-400 rounded-full animate-spin" />
-                  <span className="text-[#636e7b] text-xs">
-                    Loading frame...
-                  </span>
-                </>
-              ) : (
-                <span className="text-[#636e7b] text-sm">
-                  ← Pick a scene from the left
-                </span>
-              )}
+              <span className={`text-[11px] font-bold tracking-widest px-3 py-1 rounded-sm border ${QUALITY_STYLE.FAIL.badge}`}>FAIL</span>
+              <span className="text-red-400 font-mono text-sm font-bold">API SERVER OFFLINE</span>
+              <code className="text-[10px] text-[#2d3f55] mt-1">uvicorn main:app --reload --port 8000</code>
+            </div>
+          ) : !sampleData ? (
+            <div className="flex-1 flex items-center justify-center flex-col gap-3">
+              {selectedScene
+                ? <><div className="w-6 h-6 border-2 border-[#1c2532] border-t-[#00e5ff] rounded-full animate-spin" /><span className="text-[#636e7b] text-xs">Loading frame...</span></>
+                : <span className="text-[#636e7b] text-sm">← Pick a scene from the left</span>
+              }
             </div>
           ) : (
             <>
@@ -172,6 +223,9 @@ export default function App() {
                   <SensorChip key={ch} channel={ch} />
                 ))}
               </div>
+
+              {/* NEW: Quality banner — only renders for WARNING or FAIL */}
+              {quality && <QualityBanner quality={quality} />}
 
               {/* Tab bar */}
               <div className="flex border-b border-[#1c2532] bg-[#0d1117] px-4 shrink-0">
@@ -213,7 +267,7 @@ export default function App() {
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-[#636e7b] text-[10px]">
-                              No image
+                              {`${ch} not provided`}
                             </div>
                           )}
                           <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-sm border border-cyan-400/30 text-cyan-400 text-[9px] font-bold tracking-[1.5px] px-1.5 py-0.5 rounded-sm">
@@ -230,7 +284,8 @@ export default function App() {
                     points={lidarPoints}
                     annotations={annotations}
                     highlightedToken={highlightedToken}
-                    transformData={transformData}
+                    transformData={transformData} 
+                    quality={quality}                  
                   />
                 )}
               </div>
@@ -268,7 +323,7 @@ export default function App() {
 
           {annotations.length === 0 ? (
             <div className="flex items-center justify-center h-28 text-[#636e7b] text-xs">
-              No frame selected
+              No annotations provided for this frame
             </div>
           ) : (
             <div className="text-[10px] text-[#636e7b] px-4 py-2 border-b border-[#1c2532]">

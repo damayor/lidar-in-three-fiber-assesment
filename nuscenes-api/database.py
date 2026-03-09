@@ -1,4 +1,5 @@
 from nuscenes.nuscenes import NuScenes
+from fastapi import HTTPException
 from config import settings
 
 nusc: NuScenes = None
@@ -13,7 +14,13 @@ def init_nuscenes():
     )
     print(f"Loaded {len(nusc.scene)} scenes and {len(nusc.sample)} samples.")
 
-def get_nusc() -> NuScenes:
+def get_nusc():
     if nusc is None:
-        raise RuntimeError("nuScenes dataset is not initialized.")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "NUSCENES_UNAVAILABLE",
+                "message": "nuScenes SDK failed to initialize. The dataset may be unreachable.",
+            }
+        )
     return nusc

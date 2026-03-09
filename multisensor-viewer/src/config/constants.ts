@@ -1,3 +1,5 @@
+import type { QualityStatus } from "@interfaces/types";
+
 export const API = "http://localhost:8000";
 
 export const CAMERA_CHANNELS = [
@@ -30,4 +32,10 @@ export const getCategoryColor = (cat: string): string => {
     if (cat.startsWith(`${ns}.${sub}`)) return val;
   }
   return "#ffffff";
+};
+
+export const QUALITY_STYLE: Record<QualityStatus, { bar: string; badge: string; text: string }> = {
+  PASS:    { bar: "bg-green-950/40 border-green-500/30",   badge: "bg-green-500/20 text-green-400 border-green-500/40",   text: "text-green-400"  },
+  WARNING: { bar: "bg-yellow-950/40 border-yellow-500/30", badge: "bg-yellow-500/20 text-yellow-400 border-yellow-500/40", text: "text-yellow-400" },
+  FAIL:    { bar: "bg-red-950/40 border-red-500/30",       badge: "bg-red-500/20 text-red-400 border-red-500/40",         text: "text-red-400"    },
 };

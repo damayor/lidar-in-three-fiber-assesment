@@ -43,6 +43,8 @@ export interface SampleData {
   next: string;
   sensors: Record<string, SensorInfo>;
   annotations: Annotation[];
+  quality: QualitySummary;                                          
+  mock?: { drop_sensor: string | null; drop_annotations: boolean }; 
 }
 
 export interface ScenesResponse {
@@ -70,4 +72,17 @@ export type ActiveTab = "cameras" | "lidar";
 export interface TransformData {
   egoTranslation: [number, number, number];
   sensorTranslation: [number, number, number];
+}
+
+export type QualityStatus = "PASS" | "WARNING" | "FAIL";
+
+export interface QualityCheck {
+  name: string;
+  status: QualityStatus;
+  message: string;
+  detail?: Record<string, unknown>;
+}
+export interface QualitySummary {
+  overall_status: QualityStatus;
+  checks: QualityCheck[];
 }

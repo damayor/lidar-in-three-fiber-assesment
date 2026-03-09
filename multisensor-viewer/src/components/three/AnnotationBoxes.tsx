@@ -18,6 +18,7 @@ export const AnnotationBoxes: FC<AnnotationBoxesProps> = ({
 
   return (
     <>
+    <group rotation={[0, Math.PI / 2, 0]} >
       {annotations.map((ann) => {
         const [gx, gy, gz] = ann.translation;
         const [ex, ey, ez] = egoTranslation;
@@ -79,6 +80,7 @@ export const AnnotationBoxes: FC<AnnotationBoxesProps> = ({
           </group>
         );
       })}
+      </group>
     </>
   );
 };

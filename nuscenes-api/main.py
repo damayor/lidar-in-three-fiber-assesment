@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os
 
-from routers import scenes, samples, sensor_data
+from routers import scenes, samples, sensor_data, quality
 from config import settings
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ app.add_middleware(
 app.include_router(scenes.router, prefix="/scenes", tags=["Scenes"])
 app.include_router(samples.router, prefix="/samples", tags=["Samples (Frames)"])
 app.include_router(sensor_data.router, prefix="/sensor-data", tags=["Sensor Data"])
+app.include_router(quality.router, prefix="/quality", tags=["Data Quality"])
 
 @app.get("/", tags=["Health"])
 def root():
